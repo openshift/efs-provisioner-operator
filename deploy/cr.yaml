@@ -1,0 +1,4 @@
+apiVersion: "efs.provisioner.openshift.io/v1alpha1"
+kind: "EFSProvisioner"
+metadata:
+  name: "example"
