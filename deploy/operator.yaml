@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: efs-provisioner-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: efs-provisioner-operator
+  template:
+    metadata:
+      labels:
+        name: efs-provisioner-operator
+    spec:
+      containers:
+        - name: efs-provisioner-operator
+          image: quay.io/openshift/efs-provisioner-operator
+          ports:
+          - containerPort: 60000
+            name: metrics
+          command:
+          - efs-provisioner-operator
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OPERATOR_NAME
+              value: "efs-provisioner-operator"
