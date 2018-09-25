@@ -39,16 +39,16 @@ type EFSProvisioner struct {
 func (p *EFSProvisioner) SetDefaults() bool {
 	changed := false
 	ps := &p.Spec
-	if ps.Replicas == 0 {
-		ps.Replicas = 2
-		changed = true
-	}
 	if len(ps.ImagePullSpec) == 0 {
 		ps.ImagePullSpec = defaultImagePullSpec
 		changed = true
 	}
 	if len(ps.Version) == 0 {
 		ps.Version = defaultVersion
+		changed = true
+	}
+	if ps.Replicas == 0 {
+		ps.Replicas = 2
 		changed = true
 	}
 	if ps.BasePath == nil {
@@ -80,7 +80,7 @@ type EFSProvisionerSpec struct {
 
 	// Number of replicas to deploy for a provisioner deployment.
 	// Default: 2.
-	// TODO don't put in API, hardcode this because we know better?
+	// TODO should this be in API?
 	Replicas int32 `json:"replicas"`
 
 	// Name of storage class to create. If the storage class already exists, it will not be updated.
@@ -91,16 +91,15 @@ type EFSProvisionerSpec struct {
 	// ID of the EFS to use as base for dynamically provisioned PVs.
 	// Such EFS must be created by admin before starting a provisioner!
 	// Mandatory, no default.
-	// TODO need to wait for validation block generation? https://github.com/operator-framework/operator-sdk/issues/256
 	FSID string `json:"fsid"`
 
 	// AWS region the provisioner is running in
-	// TODO depending on where we discover this... should we write it to the Spec?
+	// TODO Region
 	Region string `json:"region"`
 
 	// Location of AWS credentials. Used to override global AWS credential from cluster config.
 	// It should be empty in the usual case.
-	// TODO: Where can we find the cluster credentials? for this, region, etc.
+	// TODO Region (same issue)
 	AWSSecrets *v1.SecretReference `json:"awsSecrets,omitempty"`
 
 	// Subdirectory on the EFS specified by FSID that should be used as base
