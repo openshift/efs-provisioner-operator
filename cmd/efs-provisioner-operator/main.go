@@ -3,14 +3,14 @@ package main
 import (
 	"context"
 	"runtime"
+	"time"
 
-	stub "github.com/wongma7/efs-provisioner-operator/pkg/stub"
-	sdk "github.com/operator-framework/operator-sdk/pkg/sdk"
-	k8sutil "github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
+	"github.com/operator-framework/operator-sdk/pkg/sdk"
+	"github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
+	"github.com/wongma7/efs-provisioner-operator/pkg/stub"
 
 	"github.com/sirupsen/logrus"
-
 	"k8s.io/api/core/v1"
 )
 
@@ -31,21 +31,18 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("Failed to get watch namespace: %v", err)
 	}
-	resyncPeriod := 5
+	resyncPeriod := 5 * time.Second
 	logrus.Infof("Watching %s, %s, %s, %d", resource, kind, namespace, resyncPeriod)
 	sdk.Watch(resource, kind, namespace, resyncPeriod)
 
+	// TODO labelSelector
 	resource = "storage.k8s.io/v1"
 	kind = "StorageClass"
-	namespace = v1.NamespaceAll
-	resyncPeriod = 5
-	logrus.Infof("Watching %s, %s, %s, %d", resource, kind, namespace, resyncPeriod)
-	sdk.Watch(resource, kind, namespace, resyncPeriod)
+	logrus.Infof("Watching %s, %s, %s, %d", resource, kind, v1.NamespaceAll, resyncPeriod)
+	sdk.Watch(resource, kind, v1.NamespaceAll, resyncPeriod)
 
-	resource = "storage.k8s.io/v1"
-	kind = "StorageClass"
-	namespace = v1.NamespaceAll
-	resyncPeriod = 5
+	resource = "apps/v1"
+	kind = "Deployment"
 	logrus.Infof("Watching %s, %s, %s, %d", resource, kind, namespace, resyncPeriod)
 	sdk.Watch(resource, kind, namespace, resyncPeriod)
 

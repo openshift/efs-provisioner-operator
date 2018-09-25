@@ -1,14 +1,14 @@
 package v1alpha1
 
 import (
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	defaultBaseImage = "openshift.com/ose-efs-provisioner"
-	// version format is "<upstream-version>-<our-version>"
-	defaultVersion = "1.0.0-0"
+	defaultImagePullSpec = "openshift/origin-efs-provisioner:latest"
+	defaultVersion       = "4.0.0"
 )
 
 type ClusterPhase string
@@ -36,64 +36,82 @@ type EFSProvisioner struct {
 }
 
 // SetDefaults sets the default vaules for the external provisioner spec and returns true if the spec was changed
-func (v *EFSProvisioner) SetDefaults() bool {
+func (p *EFSProvisioner) SetDefaults() bool {
 	changed := false
-	vs := &v.Spec
-	if vs.Replicas == 0 {
-		vs.Replicas = 2
+	ps := &p.Spec
+	if ps.Replicas == 0 {
+		ps.Replicas = 2
 		changed = true
 	}
-	if len(vs.BaseImage) == 0 {
-		vs.BaseImage = defaultBaseImage
+	if len(ps.ImagePullSpec) == 0 {
+		ps.ImagePullSpec = defaultImagePullSpec
 		changed = true
 	}
-	if len(vs.Version) == 0 {
-		vs.Version = defaultVersion
+	if len(ps.Version) == 0 {
+		ps.Version = defaultVersion
 		changed = true
 	}
+	if ps.BasePath == nil {
+		basePath := "/"
+		ps.BasePath = &basePath
+		changed = true
+	}
+	if ps.GidAllocate == nil {
+		gidAllocate := true
+		ps.GidAllocate = &gidAllocate
+		changed = true
+	}
+	if ps.GidMin == nil {
+		gidMin := 2000
+		ps.GidMin = &gidMin
+		changed = true
+	}
+	if ps.GidMax == nil {
+		gidMax := 2147483647
+		ps.GidMax = &gidMax
+		changed = true
+	}
+
 	return changed
 }
 
 type EFSProvisionerSpec struct {
+	operatorv1alpha1.OperatorSpec `json:",inline"`
+
 	// Number of replicas to deploy for a provisioner deployment.
 	// Default: 2.
 	// TODO don't put in API, hardcode this because we know better?
-	Replicas int32 `json:"replicas,omitempty"`
-
-	// Name of image (incl. version) with EFS provisioner. Used to override global image and version from cluster config.
-	// It should be empty in the usual case.
-	//// TODO: find out where the cluster config is.
-	BaseImage string `json:"baseImage"`
-
-	// Version of provisioner to be deployed.
-	// TODO remove.
-	Version string `json:"version"`
+	Replicas int32 `json:"replicas"`
 
 	// Name of storage class to create. If the storage class already exists, it will not be updated.
 	//// This allows users to create their storage classes in advance.
 	// Mandatory, no default.
-	StorageClassName string `json:"storageClassName,omitempty"`
-
-	// Location of AWS credentials. Used to override global AWS credential from cluster config.
-	// It should be empty in the usual case.
-	//// TODO: Where can we find the cluster credentials? for this, region, etc.
-	AWSSecrets v1.SecretReference `json:"awsSecrets,omitempty"`
-
-	// AWS region the provisioner is running in
-	//// TODO: find out where the cluster config is.
-	// TODO remove
-	Region string `json:"region"`
+	StorageClassName string `json:"storageClassName"`
 
 	// ID of the EFS to use as base for dynamically provisioned PVs.
 	// Such EFS must be created by admin before starting a provisioner!
 	// Mandatory, no default.
 	// TODO need to wait for validation block generation? https://github.com/operator-framework/operator-sdk/issues/256
-	FSID string `json:"FSID"`
+	FSID string `json:"fsid"`
+
+	// AWS region the provisioner is running in
+	// TODO depending on where we discover this... should we write it to the Spec?
+	Region string `json:"region"`
+
+	// Location of AWS credentials. Used to override global AWS credential from cluster config.
+	// It should be empty in the usual case.
+	// TODO: Where can we find the cluster credentials? for this, region, etc.
+	AWSSecrets *v1.SecretReference `json:"awsSecrets,omitempty"`
 
 	// Subdirectory on the EFS specified by FSID that should be used as base
 	// of all dynamically provisioner PVs.
 	// Optional, defaults to "/"
-	BasePath string `json:"basePath,omitempty"`
+	BasePath *string `json:"basePath,omitempty"`
+
+	// Group that can write to the EFS. The provisioner will run with this
+	// supplemental group to be able to create new PVs.
+	// Optional, no default.
+	SupplementalGroup *int64 `json:"supplementalGroup,omitempty"`
 
 	// Whether to allocate a unique GID in the range gidMin-gidMax to each
 	// volume. Each volume will be secured to its allocated GID. Any pod that
@@ -102,38 +120,17 @@ type EFSProvisionerSpec struct {
 	// GID as a supplemental group, but non-pod mounters outside the system will
 	// not have read/write access unless they have the GID or root privileges.
 	// Optional, defaults to true
-	GidAllocate bool `json:"gidAllocate,omitempty"`
+	GidAllocate *bool `json:"gidAllocate,omitempty"`
 
 	// Min in allocation range gidMin-gidMax when GidAllocate is true.
 	// Optional, defaults to 2000.
-	GidMin int `json:"gidMin,omitempty"`
+	GidMin *int `json:"gidMin,omitempty"`
 
 	// Max in allocation range gidMin-gidMax when GidAllocate is true.
 	// Optional, defaults to 2147483647.
-	GidMax int `json:"gidMax,omitempty"`
-
-	// Group that can write to the EFS. The provisioner will run with this
-	// supplemental group to be able to create new PVs.
-	// Optional, no default.
-	SupplementalGroup int64 `json:"supplementalGroup"`
+	GidMax *int `json:"gidMax,omitempty"`
 }
+
 type EFSProvisionerStatus struct {
-	// Phase indicates the state this provisioner jumps in.
-	// Phase goes as one way as below:
-	//   Initial -> Running
-	Phase ClusterPhase `json:"phase"`
-
-	// Initialized indicates if the provisioner is initialized
-	Initialized bool `json:"initialized"`
-
-	// PodNames of updated provisioner replicas. Updated means the provisioner container image version
-	// matches the spec's version.
-	UpdatedReplicas []string `json:"updatedReplicas,omitempty"`
-
-	// PodName of the active provisioner.
-	// Only active node can serve requests.
-	Active string `json:"active"`
-
-	// PodNames of the standby provisioners.
-	Standby []string `json:"standby"`
+	operatorv1alpha1.OperatorStatus `json:",inline"`
 }
