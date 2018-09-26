@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	api "github.com/wongma7/efs-provisioner-operator/pkg/apis/efs/v1alpha1"
 	"github.com/wongma7/efs-provisioner-operator/pkg/generated"
 
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
+	"github.com/openshift/library-go/pkg/operator/v1alpha1helpers"
 	"github.com/operator-framework/operator-sdk/pkg/k8sclient"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
@@ -19,6 +23,12 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+)
+
+const (
+	provisionerName = "openshift.io/aws-efs"
+	leaseName       = "openshift.io-aws-efs" // provisionerName slashes replaced with dashes
 )
 
 func NewHandler() sdk.Handler {
@@ -64,36 +74,71 @@ func (h *Handler) sync(pr *api.EFSProvisioner) error {
 		return sdk.Update(pr)
 	}
 
-	// TODO append to errors
-	err := h.syncDeployment(pr)
+	errors := h.syncRBAC(pr)
+
+	err := h.syncStorageClass(pr)
 	if err != nil {
-		return fmt.Errorf("error syncing deployment: %v", err)
+		errors = append(errors, fmt.Errorf("error syncing storageClass: %v", err))
 	}
 
-	err = h.syncStorageClass(pr)
+	previousAvailability := pr.Status.CurrentAvailability
+	forceDeployment := pr.ObjectMeta.Generation != pr.Status.ObservedGeneration
+	deployment, err := h.syncDeployment(pr, previousAvailability, forceDeployment)
 	if err != nil {
-		return fmt.Errorf("error syncing storageClass: %v", err)
+		errors = append(errors, fmt.Errorf("error syncing deployment: %v", err))
 	}
 
-	err = h.syncRBAC(pr)
+	versionAvailability := operatorv1alpha1.VersionAvailablity{}
+	versionAvailability = resourcemerge.ApplyGenerationAvailability(versionAvailability, deployment, errors...)
+	pr.Status.CurrentAvailability = &versionAvailability
+
+	err = h.syncStatus(pr)
 	if err != nil {
-		return fmt.Errorf("error syncing RBAC: %v", err)
+		errors = append(errors, fmt.Errorf("error syncing status: %v", err))
 	}
 
-	// TODO Status
-	// prs, err := getProvisionerStatus(pr)
-
-	// return updateProvisionerStatus(pr)
-	return nil
+	return utilerrors.NewAggregate(errors)
 }
 
-const (
-	provisionerName    = "openshift.io/aws-efs"
-	provisionerVolName = "pv-volume"
-	leaseName          = "openshift.io-aws-efs" // provisionerName slashes replaced with dashes
-)
+// Copied from https://github.com/openshift/service-serving-cert-signer/blob/9337a18300a63e369f34d411b2080b4bd877e7a9/pkg/operator/operator.go#L142
+func (h *Handler) syncStatus(operatorConfig *api.EFSProvisioner) error {
+	// given the VersionAvailability and the status.Version, we can compute availability
+	availableCondition := operatorv1alpha1.OperatorCondition{
+		Type:   operatorv1alpha1.OperatorStatusTypeAvailable,
+		Status: operatorv1alpha1.ConditionUnknown,
+	}
+	if operatorConfig.Status.CurrentAvailability != nil && operatorConfig.Status.CurrentAvailability.ReadyReplicas > 0 {
+		availableCondition.Status = operatorv1alpha1.ConditionTrue
+	} else {
+		availableCondition.Status = operatorv1alpha1.ConditionFalse
+	}
+	v1alpha1helpers.SetOperatorCondition(&operatorConfig.Status.Conditions, availableCondition)
 
-func (h *Handler) syncDeployment(pr *api.EFSProvisioner) error {
+	syncSuccessfulCondition := operatorv1alpha1.OperatorCondition{
+		Type:   operatorv1alpha1.OperatorStatusTypeSyncSuccessful,
+		Status: operatorv1alpha1.ConditionTrue,
+	}
+	if operatorConfig.Status.CurrentAvailability != nil && len(operatorConfig.Status.CurrentAvailability.Errors) > 0 {
+		syncSuccessfulCondition.Status = operatorv1alpha1.ConditionFalse
+		syncSuccessfulCondition.Message = strings.Join(operatorConfig.Status.CurrentAvailability.Errors, "\n")
+	}
+	if operatorConfig.Status.TargetAvailability != nil && len(operatorConfig.Status.TargetAvailability.Errors) > 0 {
+		syncSuccessfulCondition.Status = operatorv1alpha1.ConditionFalse
+		if len(syncSuccessfulCondition.Message) == 0 {
+			syncSuccessfulCondition.Message = strings.Join(operatorConfig.Status.TargetAvailability.Errors, "\n")
+		} else {
+			syncSuccessfulCondition.Message = availableCondition.Message + "\n" + strings.Join(operatorConfig.Status.TargetAvailability.Errors, "\n")
+		}
+	}
+	v1alpha1helpers.SetOperatorCondition(&operatorConfig.Status.Conditions, syncSuccessfulCondition)
+	if syncSuccessfulCondition.Status == operatorv1alpha1.ConditionTrue {
+		operatorConfig.Status.ObservedGeneration = operatorConfig.ObjectMeta.Generation
+	}
+
+	return sdk.Update(operatorConfig)
+}
+
+func (h *Handler) syncDeployment(pr *api.EFSProvisioner, previousAvailability *operatorv1alpha1.VersionAvailablity, forceDeployment bool) (*appsv1.Deployment, error) {
 	selector := labelsForProvisioner(pr.GetName())
 
 	deployment := resourceread.ReadDeploymentV1OrDie(generated.MustAsset("manifests/deployment.yaml"))
@@ -138,12 +183,12 @@ func (h *Handler) syncDeployment(pr *api.EFSProvisioner) error {
 	}
 
 	addOwnerRefToObject(deployment, asOwner(pr))
+	actualDeployment, _, err := resourceapply.ApplyDeployment(k8sclient.GetKubeClient().AppsV1(), deployment, resourcemerge.ExpectedDeploymentGeneration(deployment, previousAvailability), forceDeployment)
+	if err != nil {
+		return nil, err
+	}
 
-	// TODO
-	forceDeployment := pr.ObjectMeta.Generation != pr.Status.ObservedGeneration
-	_, _, err := resourceapply.ApplyDeployment(k8sclient.GetKubeClient().AppsV1(), deployment, -1, forceDeployment)
-
-	return err
+	return actualDeployment, nil
 }
 
 func (h *Handler) syncStorageClass(pr *api.EFSProvisioner) error {
@@ -187,8 +232,8 @@ func (h *Handler) syncStorageClass(pr *api.EFSProvisioner) error {
 	return nil
 }
 
-func (h *Handler) syncRBAC(pr *api.EFSProvisioner) error {
-	// TODO append to errors
+func (h *Handler) syncRBAC(pr *api.EFSProvisioner) []error {
+	errors := []error{}
 
 	serviceAccount := resourceread.ReadServiceAccountV1OrDie(generated.MustAsset("manifests/serviceaccount.yaml"))
 	// TODO namespace
@@ -196,7 +241,7 @@ func (h *Handler) syncRBAC(pr *api.EFSProvisioner) error {
 	addOwnerRefToObject(serviceAccount, asOwner(pr))
 	_, _, err := resourceapply.ApplyServiceAccount(k8sclient.GetKubeClient().CoreV1(), serviceAccount)
 	if err != nil {
-		return fmt.Errorf("error applying serviceAccount: %v", err)
+		errors = append(errors, fmt.Errorf("error applying serviceAccount: %v", err))
 	}
 
 	clusterRole := resourceread.ReadClusterRoleV1OrDie(generated.MustAsset("manifests/clusterrole.yaml"))
@@ -204,7 +249,7 @@ func (h *Handler) syncRBAC(pr *api.EFSProvisioner) error {
 	addOwnerRefToObject(clusterRole, asOwner(pr))
 	_, _, err = resourceapply.ApplyClusterRole(k8sclient.GetKubeClient().RbacV1(), clusterRole)
 	if err != nil {
-		return fmt.Errorf("error applying clusterRole: %v", err)
+		errors = append(errors, fmt.Errorf("error applying clusterRole: %v", err))
 	}
 
 	clusterRoleBinding := resourceread.ReadClusterRoleBindingV1OrDie(generated.MustAsset("manifests/clusterrolebinding.yaml"))
@@ -214,7 +259,7 @@ func (h *Handler) syncRBAC(pr *api.EFSProvisioner) error {
 	addOwnerRefToObject(clusterRoleBinding, asOwner(pr))
 	_, _, err = resourceapply.ApplyClusterRoleBinding(k8sclient.GetKubeClient().RbacV1(), clusterRoleBinding)
 	if err != nil {
-		return fmt.Errorf("error applying clusterRoleBinding: %v", err)
+		errors = append(errors, fmt.Errorf("error applying clusterRoleBinding: %v", err))
 	}
 
 	role := resourceread.ReadRoleV1OrDie(generated.MustAsset("manifests/role.yaml"))
@@ -224,7 +269,7 @@ func (h *Handler) syncRBAC(pr *api.EFSProvisioner) error {
 	addOwnerRefToObject(role, asOwner(pr))
 	_, _, err = resourceapply.ApplyRole(k8sclient.GetKubeClient().RbacV1(), role)
 	if err != nil {
-		return fmt.Errorf("error applying role: %v", err)
+		errors = append(errors, fmt.Errorf("error applying role: %v", err))
 	}
 
 	roleBinding := resourceread.ReadRoleBindingV1OrDie(generated.MustAsset("manifests/rolebinding.yaml"))
@@ -234,10 +279,10 @@ func (h *Handler) syncRBAC(pr *api.EFSProvisioner) error {
 	addOwnerRefToObject(roleBinding, asOwner(pr))
 	_, _, err = resourceapply.ApplyRoleBinding(k8sclient.GetKubeClient().RbacV1(), roleBinding)
 	if err != nil {
-		return fmt.Errorf("error applying roleBinding: %v", err)
+		errors = append(errors, fmt.Errorf("error applying roleBinding: %v", err))
 	}
 
-	return nil
+	return errors
 }
 
 // addOwnerRefToObject appends the desired OwnerReference to the object
