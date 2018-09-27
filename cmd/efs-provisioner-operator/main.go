@@ -8,7 +8,7 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
-	"github.com/wongma7/efs-provisioner-operator/pkg/stub"
+	"github.com/openshift/efs-provisioner-operator/pkg/stub"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"

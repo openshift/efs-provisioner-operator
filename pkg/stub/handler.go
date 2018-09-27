@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	api "github.com/wongma7/efs-provisioner-operator/pkg/apis/efs/v1alpha1"
-	"github.com/wongma7/efs-provisioner-operator/pkg/generated"
+	api "github.com/openshift/efs-provisioner-operator/pkg/apis/efs/v1alpha1"
+	"github.com/openshift/efs-provisioner-operator/pkg/generated"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
