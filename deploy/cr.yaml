@@ -5,3 +5,4 @@ metadata:
 spec:
   storageClassName: "aws-efs"
   fsid: "fs-asdf"
+  imagePullSpec: quay.io/external_storage/efs-provisioner
