@@ -88,6 +88,10 @@ type EFSProvisionerSpec struct {
 	// Mandatory, no default.
 	StorageClassName string `json:"storageClassName"`
 
+	// The reclaim policy of the storage class
+	// Optional, defaults to OpenShift default "Delete."
+	ReclaimPolicy *v1.PersistentVolumeReclaimPolicy `json:"reclaimPolicy,omitempty"`
+
 	// ID of the EFS to use as base for dynamically provisioned PVs.
 	// Such EFS must be created by admin before starting a provisioner!
 	// Mandatory, no default.
@@ -118,7 +122,7 @@ type EFSProvisionerSpec struct {
 	// volume because the pod will automatically receive the volume's allocated
 	// GID as a supplemental group, but non-pod mounters outside the system will
 	// not have read/write access unless they have the GID or root privileges.
-	// Optional, defaults to true
+	// Optional, defaults to true.
 	GidAllocate *bool `json:"gidAllocate,omitempty"`
 
 	// Min in allocation range gidMin-gidMax when GidAllocate is true.

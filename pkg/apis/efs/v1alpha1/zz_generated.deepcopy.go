@@ -74,6 +74,11 @@ func (in *EFSProvisionerList) DeepCopyObject() runtime.Object {
 func (in *EFSProvisionerSpec) DeepCopyInto(out *EFSProvisionerSpec) {
 	*out = *in
 	out.OperatorSpec = in.OperatorSpec
+	if in.ReclaimPolicy != nil {
+		in, out := &in.ReclaimPolicy, &out.ReclaimPolicy
+		*out = new(v1.PersistentVolumeReclaimPolicy)
+		**out = **in
+	}
 	if in.AWSSecrets != nil {
 		in, out := &in.AWSSecrets, &out.AWSSecrets
 		*out = new(v1.SecretReference)

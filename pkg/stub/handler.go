@@ -66,6 +66,7 @@ func (h *Handler) sync(pr *api.EFSProvisioner) error {
 	}
 	if pr.Spec.Region == "" {
 		// TODO Region
+		// cluster.k8s.io/v1alpha1
 	}
 
 	// Simulate initializer.
@@ -211,8 +212,9 @@ func (h *Handler) syncStorageClass(pr *api.EFSProvisioner) error {
 			Name:   pr.Spec.StorageClassName,
 			Labels: selector,
 		},
-		Provisioner: provisionerName,
-		Parameters:  parameters,
+		Provisioner:   provisionerName,
+		Parameters:    parameters,
+		ReclaimPolicy: pr.Spec.ReclaimPolicy,
 	}
 	// TODO OwnerRef
 	// https://github.com/openshift/library-go/blob/master/pkg/controller/ownerref.go
@@ -221,6 +223,7 @@ func (h *Handler) syncStorageClass(pr *api.EFSProvisioner) error {
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			// TODO ...
+			// provisioner, parameters, reclaimPolicy, (volumeBindingMode) are all immutable, for good reason.
 			err = sdk.Update(sc)
 			if err != nil {
 				return err
