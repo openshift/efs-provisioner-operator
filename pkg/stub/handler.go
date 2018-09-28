@@ -21,6 +21,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -103,6 +104,8 @@ func (h *Handler) sync(pr *api.EFSProvisioner) error {
 
 // Copied from https://github.com/openshift/service-serving-cert-signer/blob/9337a18300a63e369f34d411b2080b4bd877e7a9/pkg/operator/operator.go#L142
 func (h *Handler) syncStatus(operatorConfig *api.EFSProvisioner) error {
+	oldOperatorConfig := operatorConfig.DeepCopy()
+
 	// given the VersionAvailability and the status.Version, we can compute availability
 	availableCondition := operatorv1alpha1.OperatorCondition{
 		Type:   operatorv1alpha1.OperatorStatusTypeAvailable,
@@ -136,7 +139,11 @@ func (h *Handler) syncStatus(operatorConfig *api.EFSProvisioner) error {
 		operatorConfig.Status.ObservedGeneration = operatorConfig.ObjectMeta.Generation
 	}
 
-	return sdk.Update(operatorConfig)
+	// TODO UpdateStatus
+	if !equality.Semantic.DeepEqual(oldOperatorConfig, operatorConfig) {
+		return sdk.Update(operatorConfig)
+	}
+	return nil
 }
 
 func (h *Handler) syncDeployment(pr *api.EFSProvisioner, previousAvailability *operatorv1alpha1.VersionAvailablity, forceDeployment bool) (*appsv1.Deployment, error) {

@@ -32,7 +32,7 @@ type EFSProvisioner struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
 	Spec              EFSProvisionerSpec   `json:"spec"`
-	Status            EFSProvisionerStatus `json:"status,omitempty"`
+	Status            EFSProvisionerStatus `json:"status"`
 }
 
 // SetDefaults sets the default vaules for the external provisioner spec and returns true if the spec was changed
