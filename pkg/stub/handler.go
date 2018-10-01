@@ -60,6 +60,8 @@ func (h *Handler) Handle(ctx context.Context, event sdk.Event) error {
 
 func (h *Handler) sync(pr *api.EFSProvisioner) error {
 	pr = pr.DeepCopy()
+
+	changed := false
 	if pr.Spec.StorageClassName == "" {
 		return fmt.Errorf("StorageClassName is required")
 	}
@@ -69,13 +71,14 @@ func (h *Handler) sync(pr *api.EFSProvisioner) error {
 	if pr.Spec.Region == "" {
 		region, err := getRegion()
 		if err != nil {
-			return fmt.Errorf("Region is required, failed to determine it automatically")
+			return fmt.Errorf("Region is required, failed to determine it automatically: %v", err)
 		}
 		pr.Spec.Region = region
+		changed = true
 	}
 
 	// Simulate initializer.
-	changed := pr.SetDefaults()
+	changed = pr.SetDefaults() || changed
 	if changed {
 		return sdk.Update(pr)
 	}
