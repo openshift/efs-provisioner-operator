@@ -16,10 +16,10 @@ spec:
         - name: efs-provisioner-operator
           image: quay.io/openshift/efs-provisioner-operator
           ports:
-          - containerPort: 60000
-            name: metrics
+            - containerPort: 60000
+              name: metrics
           command:
-          - efs-provisioner-operator
+            - efs-provisioner-operator
           imagePullPolicy: IfNotPresent
           env:
             - name: WATCH_NAMESPACE
@@ -28,3 +28,7 @@ spec:
                   fieldPath: metadata.namespace
             - name: OPERATOR_NAME
               value: "efs-provisioner-operator"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName

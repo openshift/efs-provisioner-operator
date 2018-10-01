@@ -3,6 +3,7 @@ package stub
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -66,8 +67,11 @@ func (h *Handler) sync(pr *api.EFSProvisioner) error {
 		return fmt.Errorf("FSID is required")
 	}
 	if pr.Spec.Region == "" {
-		// TODO Region
-		// cluster.k8s.io/v1alpha1
+		region, err := getRegion()
+		if err != nil {
+			return fmt.Errorf("Region is required, failed to determine it automatically")
+		}
+		pr.Spec.Region = region
 	}
 
 	// Simulate initializer.
@@ -346,4 +350,36 @@ func getEFSProvisioner(object metav1.Object) (*api.EFSProvisioner, error) {
 	}
 
 	return pr, nil
+}
+
+const (
+	NodeNameEnvVar  = "NODE_NAME"
+	LabelZoneRegion = "failure-domain.beta.kubernetes.io/region"
+)
+
+func getNodeName() (string, error) {
+	nodeName, found := os.LookupEnv(NodeNameEnvVar)
+	if !found {
+		return "", fmt.Errorf("%s must be set", NodeNameEnvVar)
+	}
+	return nodeName, nil
+}
+
+func getRegion() (string, error) {
+	nodeName, err := getNodeName()
+	if err != nil {
+		return "", err
+	}
+
+	node, err := k8sclient.GetKubeClient().CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	region, ok := node.Labels[LabelZoneRegion]
+	if ok {
+		return region, nil
+	}
+
+	return "", fmt.Errorf("node label %s missing", LabelZoneRegion)
 }
