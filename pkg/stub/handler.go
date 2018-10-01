@@ -235,6 +235,7 @@ func (h *Handler) syncStorageClass(pr *api.EFSProvisioner) error {
 		if apierrors.IsAlreadyExists(err) {
 			// TODO ...
 			// provisioner, parameters, reclaimPolicy, (volumeBindingMode) are all immutable, for good reason.
+			//if !equality.Semantic.DeepEqual(oldOperatorConfig, operatorConfig) {
 			err = sdk.Update(sc)
 			if err != nil {
 				return err

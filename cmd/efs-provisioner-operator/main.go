@@ -5,10 +5,10 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/openshift/efs-provisioner-operator/pkg/stub"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
-	"github.com/openshift/efs-provisioner-operator/pkg/stub"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
@@ -39,12 +39,12 @@ func main() {
 	resource = "storage.k8s.io/v1"
 	kind = "StorageClass"
 	logrus.Infof("Watching %s, %s, %s, %d", resource, kind, v1.NamespaceAll, resyncPeriod)
-	sdk.Watch(resource, kind, v1.NamespaceAll, resyncPeriod)
+	sdk.Watch(resource, kind, v1.NamespaceAll, resyncPeriod, sdk.WithLabelSelector("efs-provisioner"))
 
 	resource = "apps/v1"
 	kind = "Deployment"
 	logrus.Infof("Watching %s, %s, %s, %d", resource, kind, namespace, resyncPeriod)
-	sdk.Watch(resource, kind, namespace, resyncPeriod)
+	sdk.Watch(resource, kind, namespace, resyncPeriod, sdk.WithLabelSelector("efs-provisioner"))
 
 	sdk.Handle(stub.NewHandler())
 	sdk.Run(context.TODO())
