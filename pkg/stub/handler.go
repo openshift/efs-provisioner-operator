@@ -325,7 +325,7 @@ func asOwner(p *api.EFSProvisioner) metav1.OwnerReference {
 func getEFSProvisioner(object metav1.Object) (*api.EFSProvisioner, error) {
 	name, ok := object.GetLabels()["efs-provisioner"]
 	if !ok {
-		return nil, fmt.Errorf("'efs-provisioner' label not found on object %v", object)
+		return nil, fmt.Errorf("'efs-provisioner' label not found on object %s", object.GetName())
 	}
 
 	namespace, err := k8sutil.GetWatchNamespace()
