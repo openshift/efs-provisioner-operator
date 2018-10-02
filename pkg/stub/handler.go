@@ -234,7 +234,7 @@ func (h *Handler) syncStorageClass(pr *api.EFSProvisioner) error {
 	}
 	// TODO OwnerRef
 	// https://github.com/openshift/library-go/blob/master/pkg/controller/ownerref.go
-	addOwnerRefToObject(sc, asOwner(pr))
+	// addOwnerRefToObject(sc, asOwner(pr))
 	err := sdk.Create(sc)
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
@@ -286,7 +286,7 @@ func (h *Handler) syncRBAC(pr *api.EFSProvisioner) []error {
 
 	clusterRole := resourceread.ReadClusterRoleV1OrDie(generated.MustAsset("manifests/clusterrole.yaml"))
 	// TODO OwnerRef
-	addOwnerRefToObject(clusterRole, asOwner(pr))
+	// addOwnerRefToObject(clusterRole, asOwner(pr))
 	_, _, err = resourceapply.ApplyClusterRole(k8sclient.GetKubeClient().RbacV1(), clusterRole)
 	if err != nil {
 		errors = append(errors, fmt.Errorf("error applying clusterRole: %v", err))
@@ -296,7 +296,7 @@ func (h *Handler) syncRBAC(pr *api.EFSProvisioner) []error {
 	// TODO namespace
 	clusterRoleBinding.Subjects[0].Namespace = pr.GetNamespace()
 	// TODO OwnerRef
-	addOwnerRefToObject(clusterRoleBinding, asOwner(pr))
+	// addOwnerRefToObject(clusterRoleBinding, asOwner(pr))
 	_, _, err = resourceapply.ApplyClusterRoleBinding(k8sclient.GetKubeClient().RbacV1(), clusterRoleBinding)
 	if err != nil {
 		errors = append(errors, fmt.Errorf("error applying clusterRoleBinding: %v", err))
