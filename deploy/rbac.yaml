@@ -105,6 +105,7 @@ rules:
   - watch
   - create
   - update
+  - delete
     # TODO
 - apiGroups:
   - rbac.authorization.k8s.io
@@ -131,6 +132,12 @@ rules:
   verbs:
   - get
   - update
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
 # ...is attempting to grant RBAC permissions not currently held
 - apiGroups: [""]
   resources: ["persistentvolumes"]

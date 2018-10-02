@@ -47,6 +47,11 @@ func (p *EFSProvisioner) SetDefaults() bool {
 		ps.Version = defaultVersion
 		changed = true
 	}
+	if ps.ReclaimPolicy == nil {
+		reclaimPolicy := v1.PersistentVolumeReclaimDelete
+		ps.ReclaimPolicy = &reclaimPolicy
+		changed = true
+	}
 	if ps.Replicas == 0 {
 		ps.Replicas = 2
 		changed = true

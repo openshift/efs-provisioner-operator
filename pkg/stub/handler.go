@@ -61,6 +61,8 @@ func (h *Handler) Handle(ctx context.Context, event sdk.Event) error {
 func (h *Handler) sync(pr *api.EFSProvisioner) error {
 	pr = pr.DeepCopy()
 
+	// TODO ManagementState
+
 	changed := false
 	if pr.Spec.StorageClassName == "" {
 		return fmt.Errorf("StorageClassName is required")
@@ -236,12 +238,32 @@ func (h *Handler) syncStorageClass(pr *api.EFSProvisioner) error {
 	err := sdk.Create(sc)
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			// TODO ...
-			// provisioner, parameters, reclaimPolicy, (volumeBindingMode) are all immutable, for good reason.
-			//if !equality.Semantic.DeepEqual(oldOperatorConfig, operatorConfig) {
-			err = sdk.Update(sc)
-			if err != nil {
-				return err
+			oldSc := &storagev1.StorageClass{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "StorageClass",
+					APIVersion: "storage.k8s.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: pr.Spec.StorageClassName,
+				},
+			}
+			err := sdk.Get(oldSc)
+			// gidallocator handles mutation of gid range parameters
+			if !equality.Semantic.DeepEqual(oldSc.Parameters, sc.Parameters) ||
+				!equality.Semantic.DeepEqual(oldSc.ReclaimPolicy, sc.ReclaimPolicy) {
+				err = sdk.Delete(oldSc)
+				if err != nil {
+					return err
+				}
+				err = sdk.Create(sc)
+				if err != nil {
+					return err
+				}
+			} else {
+				err = sdk.Update(sc)
+				if err != nil {
+					return err
+				}
 			}
 		} else {
 			return err
