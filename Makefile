@@ -11,3 +11,18 @@ generate: $(GOBINDATA_BIN)
 
 $(GOBINDATA_BIN):
 	go get -u github.com/jteeuwen/go-bindata/...
+
+helm:
+	mkdir -p _output
+	helm template deploy/olm/chart -f deploy/olm/chart/values.yaml --output-dir _output
+
+deploy-olm: helm
+	-kubectl create -f _output/olm/templates
+	-kubectl create -f _output/olm/templates/30_09-rh-operators.catalogsource.yaml
+	kubectl create -f deploy/olm/subscription.yaml
+
+deploy-vanilla:
+	kubectl create -f deploy
+
+clean:
+	rm -rf _output
