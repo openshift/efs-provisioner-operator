@@ -7,6 +7,9 @@ metadata:
     alm-examples: '[{"apiVersion":"efs.provisioner.openshift.io/v1alpha1","kind":"EFSProvisioner","metadata":{"name":"example","namespace":"default"},"spec":{"storageClassName":"aws-efs","basePath":"/"}}]'
 spec:
   displayName: AWS EFS Provisioner
+  labels:
+    olm-owner-enterprise-app: efs-provisioner-operator
+    olm-status-descriptors: efs-provisioner-operator.v0.0.1
   description: |
     A dynamic PersistentVolume provisioner for AWS EFS storage.
   keywords: ['efs', 'aws', 'provisioner', 'storage']
@@ -18,13 +21,6 @@ spec:
   provider:
     name: Red Hat, Inc
 
-  labels:
-    alm-owner-efsprovisioner: efsprovisioneroperator
-    operated-by: efsprovisionerdoperator
-  selector:
-    matchLabels:
-      alm-owner-efsprovisioner: efsprovisioneroperator
-      operated-by: efsprovisioneroperator
   install:
     strategy: deployment
     spec:
@@ -165,11 +161,11 @@ spec:
             replicas: 1
             selector:
               matchLabels:
-                name: efs-provisioner-operator-alm-owned
+                app: efs-provisioner-operator
             template:
               metadata:
                 labels:
-                  name: efs-provisioner-operator-alm-owned
+                  app: efs-provisioner-operator
               spec:
                 serviceAccountName: efs-provisioner-operator
                 containers:
