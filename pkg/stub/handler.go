@@ -248,6 +248,9 @@ func (h *Handler) syncStorageClass(pr *api.EFSProvisioner) error {
 				},
 			}
 			err := sdk.Get(oldSc)
+			if err != nil {
+				return err
+			}
 			// gidallocator handles mutation of gid range parameters
 			if !equality.Semantic.DeepEqual(oldSc.Parameters, sc.Parameters) ||
 				!equality.Semantic.DeepEqual(oldSc.ReclaimPolicy, sc.ReclaimPolicy) {
