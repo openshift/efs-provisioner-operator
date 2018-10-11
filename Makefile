@@ -19,7 +19,12 @@ helm:
 deploy-olm: helm
 	-kubectl create -f _output/olm/templates
 	-kubectl create -f _output/olm/templates/30_09-rh-operators.catalogsource.yaml
+
+deploy-subscription: deploy-olm
 	kubectl create -f deploy/olm/subscription.yaml
+
+deploy-installplan: deploy-olm
+	kubectl create -f deploy/olm/installplan.yaml
 
 deploy-vanilla:
 	kubectl create -f deploy

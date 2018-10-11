@@ -1,0 +1,10 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: InstallPlan
+metadata:
+  name: efs-provisioner
+spec:
+  source: rh-operators
+  approval: Automatic
+  approved: true
+  clusterServiceVersionNames:
+    - efs-provisioner-operator.v0.0.1
