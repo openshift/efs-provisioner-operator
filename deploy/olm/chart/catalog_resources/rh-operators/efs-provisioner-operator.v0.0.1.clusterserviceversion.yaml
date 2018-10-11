@@ -1,7 +1,7 @@
 apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
-  name: efs-provisioner-operator.v0.1
+  name: efs-provisioner-operator.v0.0.1
   namespace: default
   annotations:
     alm-examples: '[{"apiVersion":"efs.provisioner.openshift.io/v1alpha1","kind":"EFSProvisioner","metadata":{"name":"example","namespace":"default"},"spec":{"storageClassName":"aws-efs","basePath":"/"}}]'
