@@ -1,4 +1,1 @@
-packageName: efs-provisioner
-channels:
-- name: alpha
-  currentCSV: efs-provisioner-operator.v0.0.1
+../../../../olm-catalog/package.yaml

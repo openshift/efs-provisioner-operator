@@ -21,10 +21,10 @@ deploy-olm: helm
 	-kubectl create -f _output/olm/templates/30_09-rh-operators.catalogsource.yaml
 
 deploy-subscription: deploy-olm
-	kubectl create -f deploy/olm/subscription.yaml
+	kubectl create -f deploy/olm-catalog/subscription.yaml
 
 deploy-installplan: deploy-olm
-	kubectl create -f deploy/olm/installplan.yaml
+	kubectl create -f deploy/olm-catalog/installplan.yaml
 
 deploy-vanilla:
 	kubectl create -f deploy
