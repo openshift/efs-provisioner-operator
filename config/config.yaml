@@ -1,3 +1,0 @@
-apiVersion: efs.provisioner.openshift.io/v1alpha1
-kind: EFSProvisioner
-projectName: efs-provisioner-operator

@@ -4,7 +4,7 @@ metadata:
   name: efs-provisioner-operator.v0.0.1
   namespace: default
   annotations:
-    alm-examples: '[{"apiVersion":"efs.provisioner.openshift.io/v1alpha1","kind":"EFSProvisioner","metadata":{"name":"example","namespace":"default"},"spec":{"storageClassName":"aws-efs","basePath":"/"}}]'
+    alm-examples: '[{"apiVersion":"efsprovisioner.efs.storage.openshift.io/v1alpha1","kind":"EFSProvisioner","metadata":{"name":"example","namespace":"default"},"spec":{"storageClassName":"aws-efs","basePath":"/"}}]'
 spec:
   displayName: AWS EFS Provisioner
   labels:
@@ -28,7 +28,7 @@ spec:
         - serviceAccountName: efs-provisioner-operator
           rules:
             - apiGroups:
-              - efs.provisioner.openshift.io
+              - efs.storage.openshift.io
               resources:
               - "*"
               verbs:
@@ -190,7 +190,7 @@ spec:
                             fieldPath: spec.nodeName
   customresourcedefinitions:
     owned:
-      - name: efsprovisioners.efs.provisioner.openshift.io
+      - name: efsprovisioners.efs.storage.openshift.io
         version: v1alpha1
         kind: EFSProvisioner
         displayName: EFS Provisioner
