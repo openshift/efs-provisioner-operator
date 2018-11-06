@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -135,6 +136,7 @@ func (r *ReconcileEFSProvisioner) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, r.client.Update(context.TODO(), pr)
 	}
 	// TODO cleanup if deletionTimestamp != nil, remove finalizer
+	// TODO cleanup unwanted StorageClass (changed StorageClassName)
 
 	// TODO move validation to CRD
 	changed := false
@@ -173,16 +175,15 @@ func (r *ReconcileEFSProvisioner) Reconcile(request reconcile.Request) (reconcil
 		errors = append(errors, fmt.Errorf("error syncing deployment: %v", err))
 	}
 
-	versionAvailability := operatorv1alpha1.VersionAvailability{}
-	versionAvailability = resourcemerge.ApplyDeploymentGenerationAvailability(versionAvailability, deployment, errors...)
-	pr.Status.CurrentAvailability = &versionAvailability
-
-	err = r.syncStatus(pr)
+	err = r.syncStatus(pr, deployment, errors)
 	if err != nil {
 		errors = append(errors, fmt.Errorf("error syncing status: %v", err))
 	}
 
-	return reconcile.Result{}, nil
+	if len(errors) > 0 {
+		log.Printf("errors: %v", errors)
+	}
+	return reconcile.Result{}, utilerrors.NewAggregate(errors)
 }
 
 const (
@@ -272,7 +273,7 @@ func (r *ReconcileEFSProvisioner) syncStorageClass(pr *efsv1alpha1.EFSProvisione
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			oldSc := &storagev1.StorageClass{}
-			err := r.client.Get(context.TODO(), types.NamespacedName{Name: oldSc.GetName(), Namespace: corev1.NamespaceAll}, oldSc)
+			err := r.client.Get(context.TODO(), types.NamespacedName{Name: sc.GetName(), Namespace: corev1.NamespaceAll}, oldSc)
 			if err != nil {
 				return err
 			}
@@ -369,8 +370,10 @@ func labelsForProvisioner(pr *efsv1alpha1.EFSProvisioner) map[string]string {
 }
 
 // Copied from https://github.com/openshift/service-serving-cert-signer/blob/9337a18300a63e369f34d411b2080b4bd877e7a9/pkg/operator/operator.go#L142
-func (r *ReconcileEFSProvisioner) syncStatus(operatorConfig *efsv1alpha1.EFSProvisioner) error {
-	oldOperatorConfig := operatorConfig.DeepCopy()
+func (r *ReconcileEFSProvisioner) syncStatus(operatorConfig *efsv1alpha1.EFSProvisioner, deployment *appsv1.Deployment, errors []error) error {
+	versionAvailability := operatorv1alpha1.VersionAvailability{}
+	versionAvailability = resourcemerge.ApplyDeploymentGenerationAvailability(versionAvailability, deployment, errors...)
+	operatorConfig.Status.CurrentAvailability = &versionAvailability
 
 	// given the VersionAvailability and the status.Version, we can compute availability
 	availableCondition := operatorv1alpha1.OperatorCondition{
@@ -405,10 +408,8 @@ func (r *ReconcileEFSProvisioner) syncStatus(operatorConfig *efsv1alpha1.EFSProv
 		operatorConfig.Status.ObservedGeneration = operatorConfig.ObjectMeta.Generation
 	}
 
-	if !equality.Semantic.DeepEqual(oldOperatorConfig, operatorConfig) {
-		return r.client.Status().Update(context.TODO(), operatorConfig)
-	}
-	return nil
+	// TODO status subresource? need status to increment generation and forc deployment
+	return r.client.Update(context.TODO(), operatorConfig)
 }
 
 const (
