@@ -33,11 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
-
 // Add creates a new EFSProvisioner Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
@@ -67,7 +62,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
 	// Watch for changes to secondary resource Deployments and StorageClasses and requeue the owner EFSProvisioner
 	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
@@ -77,6 +71,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	// TODO watch doesn't include owner's namespace?
 	err = c.Watch(&source.Kind{Type: &storagev1.StorageClass{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &efsv1alpha1.EFSProvisioner{},
@@ -101,8 +96,6 @@ type ReconcileEFSProvisioner struct {
 
 // Reconcile reads that state of the cluster for a EFSProvisioner object and makes changes based on the state read
 // and what is in the EFSProvisioner.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
@@ -184,6 +177,11 @@ func (r *ReconcileEFSProvisioner) Reconcile(request reconcile.Request) (reconcil
 	versionAvailability = resourcemerge.ApplyDeploymentGenerationAvailability(versionAvailability, deployment, errors...)
 	pr.Status.CurrentAvailability = &versionAvailability
 
+	err = r.syncStatus(pr)
+	if err != nil {
+		errors = append(errors, fmt.Errorf("error syncing status: %v", err))
+	}
+
 	return reconcile.Result{}, nil
 }
 
@@ -193,11 +191,13 @@ const (
 )
 
 func (r *ReconcileEFSProvisioner) syncRBAC(pr *efsv1alpha1.EFSProvisioner) []error {
+	selector := labelsForProvisioner(pr)
+
 	errors := []error{}
 
 	serviceAccount := resourceread.ReadServiceAccountV1OrDie(generated.MustAsset("manifests/serviceaccount.yaml"))
-	// TODO namespace
-	serviceAccount.Namespace = pr.GetNamespace()
+	serviceAccount.SetNamespace(pr.GetNamespace())
+	serviceAccount.SetLabels(selector)
 	if err := controllerutil.SetControllerReference(pr, serviceAccount, r.scheme); err != nil {
 		errors = append(errors, err)
 	}
@@ -207,27 +207,24 @@ func (r *ReconcileEFSProvisioner) syncRBAC(pr *efsv1alpha1.EFSProvisioner) []err
 	}
 
 	clusterRole := resourceread.ReadClusterRoleV1OrDie(generated.MustAsset("manifests/clusterrole.yaml"))
-	// TODO OwnerRef/label
-	// addOwnerRefToObject(clusterRole, asOwner(pr))
+	clusterRole.SetLabels(selector)
 	_, _, err = resourceapply.ApplyClusterRole(r.clientset.RbacV1(), clusterRole)
 	if err != nil {
 		errors = append(errors, fmt.Errorf("error applying clusterRole: %v", err))
 	}
 
 	clusterRoleBinding := resourceread.ReadClusterRoleBindingV1OrDie(generated.MustAsset("manifests/clusterrolebinding.yaml"))
-	// TODO namespace
 	clusterRoleBinding.Subjects[0].Namespace = pr.GetNamespace()
-	// TODO OwnerRef/label
-	// addOwnerRefToObject(clusterRoleBinding, asOwner(pr))
+	clusterRoleBinding.SetLabels(selector)
 	_, _, err = resourceapply.ApplyClusterRoleBinding(r.clientset.RbacV1(), clusterRoleBinding)
 	if err != nil {
 		errors = append(errors, fmt.Errorf("error applying clusterRoleBinding: %v", err))
 	}
 
 	role := resourceread.ReadRoleV1OrDie(generated.MustAsset("manifests/role.yaml"))
-	// TODO namespace
 	role.Namespace = pr.GetNamespace()
 	role.Rules[0].ResourceNames = []string{leaseName}
+	role.SetLabels(selector)
 	if err := controllerutil.SetControllerReference(pr, role, r.scheme); err != nil {
 		errors = append(errors, err)
 	}
@@ -237,9 +234,9 @@ func (r *ReconcileEFSProvisioner) syncRBAC(pr *efsv1alpha1.EFSProvisioner) []err
 	}
 
 	roleBinding := resourceread.ReadRoleBindingV1OrDie(generated.MustAsset("manifests/rolebinding.yaml"))
-	// TODO namespace
 	roleBinding.Namespace = pr.GetNamespace()
 	roleBinding.Subjects[0].Namespace = pr.GetNamespace()
+	roleBinding.SetLabels(selector)
 	if err := controllerutil.SetControllerReference(pr, roleBinding, r.scheme); err != nil {
 		errors = append(errors, err)
 	}
@@ -252,7 +249,7 @@ func (r *ReconcileEFSProvisioner) syncRBAC(pr *efsv1alpha1.EFSProvisioner) []err
 }
 
 func (r *ReconcileEFSProvisioner) syncStorageClass(pr *efsv1alpha1.EFSProvisioner) error {
-	selector := labelsForProvisioner(pr.GetName())
+	selector := labelsForProvisioner(pr)
 
 	// TODO use manifest yaml
 	parameters := map[string]string{}
@@ -264,15 +261,13 @@ func (r *ReconcileEFSProvisioner) syncStorageClass(pr *efsv1alpha1.EFSProvisione
 
 	sc := &storagev1.StorageClass{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   pr.Spec.StorageClassName,
-			Labels: selector,
+			Name: pr.Spec.StorageClassName,
 		},
 		Provisioner:   provisionerName,
 		Parameters:    parameters,
 		ReclaimPolicy: pr.Spec.ReclaimPolicy,
 	}
-	// TODO OwnerRef/label
-	// addOwnerRefToObject(sc, asOwner(pr))
+	sc.SetLabels(selector)
 	err := r.client.Create(context.TODO(), sc)
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
@@ -306,12 +301,11 @@ func (r *ReconcileEFSProvisioner) syncStorageClass(pr *efsv1alpha1.EFSProvisione
 }
 
 func (r *ReconcileEFSProvisioner) syncDeployment(pr *efsv1alpha1.EFSProvisioner, previousAvailability *operatorv1alpha1.VersionAvailability, forceDeployment bool) (*appsv1.Deployment, error) {
-	selector := labelsForProvisioner(pr.GetName())
+	selector := labelsForProvisioner(pr)
 
 	deployment := resourceread.ReadDeploymentV1OrDie(generated.MustAsset("manifests/deployment.yaml"))
 
 	deployment.SetName(pr.GetName())
-	// TODO namespace
 	deployment.SetNamespace(pr.GetNamespace())
 	deployment.SetLabels(selector)
 
@@ -360,10 +354,18 @@ func (r *ReconcileEFSProvisioner) syncDeployment(pr *efsv1alpha1.EFSProvisioner,
 	return actualDeployment, nil
 }
 
+const (
+	OwnerLabelNamespace = "efs.storage.openshift.io/owner-namespace"
+	OwnerLabelName      = "efs.storage.openshift.io/owner-name"
+)
+
 // labelsForProvisioner returns the labels for selecting the resources
 // belonging to the given provisioner name.
-func labelsForProvisioner(name string) map[string]string {
-	return map[string]string{"app": "efs-provisioner", "efs-provisioner": name}
+func labelsForProvisioner(pr *efsv1alpha1.EFSProvisioner) map[string]string {
+	return map[string]string{
+		OwnerLabelNamespace: pr.Namespace,
+		OwnerLabelName:      pr.Name,
+	}
 }
 
 // Copied from https://github.com/openshift/service-serving-cert-signer/blob/9337a18300a63e369f34d411b2080b4bd877e7a9/pkg/operator/operator.go#L142

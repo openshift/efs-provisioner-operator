@@ -32,7 +32,7 @@ func (p *EFSProvisioner) SetDefaults() bool {
 		changed = true
 	}
 	if ps.Replicas == 0 {
-		ps.Replicas = 2
+		ps.Replicas = 1
 		changed = true
 	}
 	if ps.BasePath == nil {
