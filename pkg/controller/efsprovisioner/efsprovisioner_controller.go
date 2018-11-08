@@ -409,7 +409,7 @@ func (r *ReconcileEFSProvisioner) syncStatus(operatorConfig *efsv1alpha1.EFSProv
 	}
 
 	// TODO status subresource? need status to increment generation and forc deployment
-	return r.client.Update(context.TODO(), operatorConfig)
+	return r.client.Status().Update(context.TODO(), operatorConfig)
 }
 
 const (
