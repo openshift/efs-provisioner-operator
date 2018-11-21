@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes"
+	storageclientv1 "k8s.io/client-go/kubernetes/typed/storage/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -76,10 +77,15 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO watch doesn't include owner's namespace? copy https://github.com/openshift/csi-operator/blob/ff0acbe276df5b2bad13dcd2f7e32b4400000e1e/pkg/controller/csidriverdeployment/label_event_handler.go
-	err = c.Watch(&source.Kind{Type: &storagev1.StorageClass{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &efsv1alpha1.EFSProvisioner{},
+	err = c.Watch(&source.Kind{Type: &storagev1.StorageClass{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+			return []reconcile.Request{
+				{NamespacedName: types.NamespacedName{
+					Namespace: a.Meta.GetLabels()[OwnerLabelNamespace],
+					Name:      a.Meta.GetLabels()[OwnerLabelName],
+				}},
+			}
+		}),
 	})
 	if err != nil {
 		return err
@@ -259,36 +265,59 @@ func (r *ReconcileEFSProvisioner) syncStorageClass(pr *efsv1alpha1.EFSProvisione
 		ReclaimPolicy: pr.Spec.ReclaimPolicy,
 	}
 	sc.SetLabels(selector)
-	err := r.client.Create(context.TODO(), sc)
-	if err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			oldSc := &storagev1.StorageClass{}
-			err := r.client.Get(context.TODO(), types.NamespacedName{Name: sc.GetName(), Namespace: corev1.NamespaceAll}, oldSc)
-			if err != nil {
-				return err
-			}
-			// gidallocator handles mutation of gid range parameters
-			if !equality.Semantic.DeepEqual(oldSc.Parameters, sc.Parameters) ||
-				!equality.Semantic.DeepEqual(oldSc.ReclaimPolicy, sc.ReclaimPolicy) {
-				err = r.client.Delete(context.TODO(), oldSc)
-				if err != nil {
-					return err
-				}
-				err = r.client.Create(context.TODO(), sc)
-				if err != nil {
-					return err
-				}
-			} else {
-				err = r.client.Update(context.TODO(), sc)
-				if err != nil {
-					return err
-				}
-			}
-		} else {
-			return err
-		}
+
+	_, _, err := ApplyStorageClass(r.clientset.StorageV1(), sc)
+	return err
+}
+
+// ApplyStorageClass merges objectmeta, tries to write everything else
+func ApplyStorageClass(client storageclientv1.StorageClassesGetter, required *storagev1.StorageClass) (*storagev1.StorageClass, bool, error) {
+	existing, err := client.StorageClasses().Get(required.Name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		actual, err := client.StorageClasses().Create(required)
+		return actual, true, err
 	}
-	return nil
+	if err != nil {
+		return nil, false, err
+	}
+
+	modified := resourcemerge.BoolPtr(false)
+	resourcemerge.EnsureObjectMeta(modified, &existing.ObjectMeta, required.ObjectMeta)
+	contentSame := equality.Semantic.DeepEqual(existing, required)
+	if contentSame && !*modified {
+		return existing, false, nil
+	}
+
+	// Provisioner, Parameters, ReclaimPolicy, and VolumeBindingMode are immutable
+	recreate := resourcemerge.BoolPtr(false)
+	resourcemerge.SetStringIfSet(recreate, &existing.Provisioner, required.Provisioner)
+	resourcemerge.SetMapStringStringIfSet(recreate, &existing.Parameters, required.Parameters)
+	if required.ReclaimPolicy != nil && !equality.Semantic.DeepEqual(existing.ReclaimPolicy, required.ReclaimPolicy) {
+		existing.ReclaimPolicy = required.ReclaimPolicy
+		*recreate = true
+	}
+	resourcemerge.SetStringSliceIfSet(modified, &existing.MountOptions, required.MountOptions)
+	if required.AllowVolumeExpansion != nil && !equality.Semantic.DeepEqual(existing.AllowVolumeExpansion, required.AllowVolumeExpansion) {
+		existing.AllowVolumeExpansion = required.AllowVolumeExpansion
+	}
+	if required.VolumeBindingMode != nil && !equality.Semantic.DeepEqual(existing.VolumeBindingMode, required.VolumeBindingMode) {
+		existing.VolumeBindingMode = required.VolumeBindingMode
+		*recreate = true
+	}
+	if required.AllowedTopologies != nil && !equality.Semantic.DeepEqual(existing.AllowedTopologies, required.AllowedTopologies) {
+		existing.AllowedTopologies = required.AllowedTopologies
+	}
+
+	if *recreate {
+		err := client.StorageClasses().Delete(existing.Name, nil)
+		if err != nil && !apierrors.IsNotFound(err) {
+			return nil, false, err
+		}
+		actual, err := client.StorageClasses().Create(existing)
+		return actual, true, err
+	}
+	actual, err := client.StorageClasses().Update(existing)
+	return actual, true, err
 }
 
 func (r *ReconcileEFSProvisioner) syncDeployment(pr *efsv1alpha1.EFSProvisioner, previousAvailability *operatorv1alpha1.VersionAvailability, forceDeployment bool) (*appsv1.Deployment, error) {
