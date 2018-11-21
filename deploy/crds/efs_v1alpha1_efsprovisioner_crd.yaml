@@ -17,7 +17,43 @@ spec:
       properties:
         spec:
           properties:
+            managementState:
+              type: string
+              enum:
+                - Managed
+                - Unmanaged
+                - Removed
+            imagePullSpec:
+              type: string
+            version:
+              type: string
             replicas:
               type: integer
+            storageClassName:
+              type: string
+            fsid:
+              type: string
+            region:
+              type: string
+            reclaimPolicy:
+              type: string
+              enum:
+                - Delete
+                - Retain
+            basePath:
+              type: string
+            supplementalGroup:
+              type: integer
+            gidAllocate:
+              type: boolean
+            gidMin:
+              type: integer
+            gidMax:
+              type: integer
+          required:
+            - imagePullSpec
+            - storageClassName
+            - fsid
+            - region
   subresources:
     status: {}

@@ -18,6 +18,10 @@ const (
 func (p *EFSProvisioner) SetDefaults() bool {
 	changed := false
 	ps := &p.Spec
+	if len(ps.ManagementState) == 0 {
+		ps.ManagementState = "Managed"
+		changed = true
+	}
 	if len(ps.ImagePullSpec) == 0 {
 		ps.ImagePullSpec = defaultImagePullSpec
 		changed = true
@@ -65,13 +69,12 @@ type EFSProvisionerSpec struct {
 	operatorv1alpha1.OperatorSpec `json:",inline"`
 
 	// Number of replicas to deploy for a provisioner deployment.
-	// Default: 2.
-	// TODO should this be in API?
+	// Optional, defaults to 1.
 	Replicas int32 `json:"replicas"`
 
 	// Name of storage class to create. If the storage class already exists, it will not be updated.
 	//// This allows users to create their storage classes in advance.
-	// Mandatory, no default.
+	// Required, no default.
 	StorageClassName string `json:"storageClassName"`
 
 	// The reclaim policy of the storage class
@@ -80,11 +83,11 @@ type EFSProvisionerSpec struct {
 
 	// ID of the EFS to use as base for dynamically provisioned PVs.
 	// Such EFS must be created by admin before starting a provisioner!
-	// Mandatory, no default.
+	// Required, no default.
 	FSID string `json:"fsid"`
 
 	// AWS region the provisioner is running in
-	// TODO Region
+	// Required, no default.
 	Region string `json:"region"`
 
 	// Location of AWS credentials. Used to override global AWS credential from cluster config.
@@ -94,7 +97,7 @@ type EFSProvisionerSpec struct {
 
 	// Subdirectory on the EFS specified by FSID that should be used as base
 	// of all dynamically provisioner PVs.
-	// Optional, defaults to "/"
+	// Optional, defaults to "/".
 	BasePath *string `json:"basePath,omitempty"`
 
 	// Group that can write to the EFS. The provisioner will run with this

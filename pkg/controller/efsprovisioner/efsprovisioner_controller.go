@@ -34,6 +34,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+const (
+	finalizerName = "efs.storage.openshift.io"
+)
+
 // Add creates a new EFSProvisioner Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
@@ -72,7 +76,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO watch doesn't include owner's namespace?
+	// TODO watch doesn't include owner's namespace? copy https://github.com/openshift/csi-operator/blob/ff0acbe276df5b2bad13dcd2f7e32b4400000e1e/pkg/controller/csidriverdeployment/label_event_handler.go
 	err = c.Watch(&source.Kind{Type: &storagev1.StorageClass{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &efsv1alpha1.EFSProvisioner{},
@@ -138,27 +142,13 @@ func (r *ReconcileEFSProvisioner) Reconcile(request reconcile.Request) (reconcil
 	// TODO cleanup if deletionTimestamp != nil, remove finalizer
 	// TODO cleanup unwanted StorageClass (changed StorageClassName)
 
-	// TODO move validation to CRD
-	changed := false
-	if pr.Spec.StorageClassName == "" {
-		return reconcile.Result{}, fmt.Errorf("StorageClassName is required")
-	}
-	if pr.Spec.FSID == "" {
-		return reconcile.Result{}, fmt.Errorf("FSID is required")
-	}
-	if pr.Spec.Region == "" {
-		region, err := r.getRegion()
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("Region is required, failed to determine it automatically: %v", err)
-		}
-		pr.Spec.Region = region
-		changed = true
-	}
-
 	// Simulate initializer.
-	changed = pr.SetDefaults() || changed
-	if changed {
-		return reconcile.Result{}, r.client.Update(context.TODO(), pr)
+	if pr.SetDefaults() {
+		err := r.client.Update(context.TODO(), pr)
+		if err != nil {
+			log.Printf("error setting defaults: %v", err)
+		}
+		return reconcile.Result{}, err
 	}
 
 	errors := r.syncRBAC(pr)
@@ -408,7 +398,6 @@ func (r *ReconcileEFSProvisioner) syncStatus(operatorConfig *efsv1alpha1.EFSProv
 		operatorConfig.Status.ObservedGeneration = operatorConfig.ObjectMeta.Generation
 	}
 
-	// TODO status subresource? need status to increment generation and forc deployment
 	return r.client.Status().Update(context.TODO(), operatorConfig)
 }
 
@@ -417,6 +406,7 @@ const (
 	LabelZoneRegion = "failure-domain.beta.kubernetes.io/region"
 )
 
+// TODO region
 func (r *ReconcileEFSProvisioner) getRegion() (string, error) {
 	name, err := getNodeName()
 	if err != nil {

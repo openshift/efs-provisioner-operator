@@ -3,7 +3,7 @@ kind: EFSProvisioner
 metadata:
   name: example-efsprovisioner
 spec:
-  storageClassName: "aws-efs"
-  fsid: "fs-asdf"
   imagePullSpec: quay.io/external_storage/efs-provisioner
-  region: "us-east-1"
+  storageClassName: aws-efs
+  fsid: fs-asdf
+  region: us-east-2
