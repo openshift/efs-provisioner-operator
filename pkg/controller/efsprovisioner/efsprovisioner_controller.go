@@ -17,10 +17,12 @@ import (
 	"github.com/openshift/library-go/pkg/operator/v1alpha1helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -133,7 +135,11 @@ func (r *ReconcileEFSProvisioner) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, nil
 
 	case operatorv1alpha1.Removed:
-		// TODO cleanup, remove finalizer
+		err := r.cleanup(pr)
+		if err != nil {
+			log.Printf("error cleaning up: %v", err)
+			return reconcile.Result{}, err
+		}
 		pr.Status.TaskSummary = "Remove"
 		pr.Status.TargetAvailability = nil
 		pr.Status.CurrentAvailability = nil
@@ -145,8 +151,14 @@ func (r *ReconcileEFSProvisioner) Reconcile(request reconcile.Request) (reconcil
 		}
 		return reconcile.Result{}, r.client.Update(context.TODO(), pr)
 	}
-	// TODO cleanup if deletionTimestamp != nil, remove finalizer
-	// TODO cleanup unwanted StorageClass (changed StorageClassName)
+
+	if pr.DeletionTimestamp != nil {
+		err := r.cleanup(pr)
+		if err != nil {
+			log.Printf("error cleaning up: %v", err)
+			return reconcile.Result{}, err
+		}
+	}
 
 	// Simulate initializer.
 	if pr.SetDefaults() {
@@ -154,6 +166,11 @@ func (r *ReconcileEFSProvisioner) Reconcile(request reconcile.Request) (reconcil
 		if err != nil {
 			log.Printf("error setting defaults: %v", err)
 		}
+		return reconcile.Result{}, err
+	}
+
+	err = r.syncFinalizer(pr)
+	if err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -186,6 +203,28 @@ const (
 	provisionerName = "openshift.io/aws-efs"
 	leaseName       = "openshift.io-aws-efs" // provisionerName slashes replaced with dashes
 )
+
+func (r *ReconcileEFSProvisioner) syncFinalizer(pr *efsv1alpha1.EFSProvisioner) error {
+	if hasFinalizer(pr.Finalizers, finalizerName) {
+		return nil
+	}
+
+	if pr.Finalizers == nil {
+		pr.Finalizers = []string{}
+	}
+	pr.Finalizers = append(pr.Finalizers, finalizerName)
+
+	return r.client.Update(context.TODO(), pr)
+}
+
+func hasFinalizer(finalizers []string, finalizerName string) bool {
+	for _, f := range finalizers {
+		if f == finalizerName {
+			return true
+		}
+	}
+	return false
+}
 
 func (r *ReconcileEFSProvisioner) syncRBAC(pr *efsv1alpha1.EFSProvisioner) []error {
 	selector := labelsForProvisioner(pr)
@@ -372,6 +411,85 @@ func (r *ReconcileEFSProvisioner) syncDeployment(pr *efsv1alpha1.EFSProvisioner,
 	}
 
 	return actualDeployment, nil
+}
+
+func (r *ReconcileEFSProvisioner) cleanup(pr *efsv1alpha1.EFSProvisioner) error {
+	err := r.cleanupStorageClass(pr)
+	if err != nil {
+		return err
+	}
+	err = r.cleanupRBAC(pr)
+	if err != nil {
+		return err
+	}
+	err = r.cleanupFinalizer(pr)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcileEFSProvisioner) cleanupStorageClass(pr *efsv1alpha1.EFSProvisioner) error {
+	scList := &storagev1.StorageClassList{}
+	opts := &client.ListOptions{
+		LabelSelector: labels.Set(labelsForProvisioner(pr)).AsSelector(),
+	}
+	err := r.client.List(context.TODO(), opts, scList)
+	if err != nil {
+		return err
+	}
+	for _, sc := range scList.Items {
+		err = r.client.Delete(context.TODO(), &sc)
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ReconcileEFSProvisioner) cleanupRBAC(pr *efsv1alpha1.EFSProvisioner) error {
+	crList := &rbacv1.ClusterRoleList{}
+	opts := &client.ListOptions{
+		LabelSelector: labels.Set(labelsForProvisioner(pr)).AsSelector(),
+	}
+	err := r.client.List(context.TODO(), opts, crList)
+	if err != nil {
+		return err
+	}
+	for _, cr := range crList.Items {
+		err := r.client.Delete(context.TODO(), &cr)
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	crbList := &rbacv1.ClusterRoleBindingList{}
+	err = r.client.List(context.TODO(), opts, crbList)
+	if err != nil {
+		return err
+	}
+	for _, crb := range crbList.Items {
+		err := r.client.Delete(context.TODO(), &crb)
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ReconcileEFSProvisioner) cleanupFinalizer(pr *efsv1alpha1.EFSProvisioner) error {
+	finalizers := []string{}
+	for _, f := range pr.Finalizers {
+		if f == finalizerName {
+			continue
+		}
+		finalizers = append(finalizers, f)
+	}
+	pr.Finalizers = finalizers
+	err := r.client.Update(context.TODO(), pr)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 const (
