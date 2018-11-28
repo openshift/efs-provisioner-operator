@@ -95,9 +95,9 @@ func (in *EFSProvisionerSpec) DeepCopyInto(out *EFSProvisionerSpec) {
 		*out = new(v1.PersistentVolumeReclaimPolicy)
 		**out = **in
 	}
-	if in.AWSSecrets != nil {
-		in, out := &in.AWSSecrets, &out.AWSSecrets
-		*out = new(v1.SecretReference)
+	if in.DNSName != nil {
+		in, out := &in.DNSName, &out.DNSName
+		*out = new(string)
 		**out = **in
 	}
 	if in.BasePath != nil {

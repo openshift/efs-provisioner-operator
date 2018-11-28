@@ -692,7 +692,7 @@
   revision = "1f13a808da65775f22cbf47862c4e5898d8f4ca1"
 
 [[projects]]
-  digest = "1:6262e52f5247e54db8cf024fc6149706147ac5778b8368d4692191367ef91d3b"
+  digest = "1:8ab487a323486c8bbbaa3b689850487fdccc6cbea8690620e083b2d230a4447e"
   name = "k8s.io/code-generator"
   packages = [
     "cmd/client-gen",
@@ -720,7 +720,7 @@
     "cmd/openapi-gen/args",
     "pkg/util",
   ]
-  pruneopts = "UT"
+  pruneopts = "T"
   revision = "6702109cc68eb6fe6350b83e14407c8d7309fd1a"
 
 [[projects]]
@@ -817,15 +817,18 @@
     "github.com/operator-framework/operator-sdk/version",
     "k8s.io/api/apps/v1",
     "k8s.io/api/core/v1",
+    "k8s.io/api/rbac/v1",
     "k8s.io/api/storage/v1",
     "k8s.io/apimachinery/pkg/api/equality",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
+    "k8s.io/apimachinery/pkg/labels",
     "k8s.io/apimachinery/pkg/runtime",
     "k8s.io/apimachinery/pkg/runtime/schema",
     "k8s.io/apimachinery/pkg/types",
     "k8s.io/apimachinery/pkg/util/errors",
     "k8s.io/client-go/kubernetes",
+    "k8s.io/client-go/kubernetes/typed/storage/v1",
     "k8s.io/client-go/plugin/pkg/client/auth/gcp",
     "k8s.io/code-generator/cmd/client-gen",
     "k8s.io/code-generator/cmd/conversion-gen",

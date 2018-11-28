@@ -90,10 +90,16 @@ type EFSProvisionerSpec struct {
 	// Required, no default.
 	Region string `json:"region"`
 
-	// Location of AWS credentials. Used to override global AWS credential from cluster config.
-	// It should be empty in the usual case.
-	// TODO Region (same issue)
-	AWSSecrets *v1.SecretReference `json:"awsSecrets,omitempty"`
+	// Custom DNS name of the EFS share to mount instead of fsid.efs.region.amazonaws.com
+	// Optional, no default.
+	DNSName *string `json:"dnsName,omitempty"`
+
+	/*
+		// Location of AWS credentials. Used to override global AWS credential from cluster config.
+		// It should be empty in the usual case.
+		// TODO Region (same issue)
+		AWSSecrets *v1.SecretReference `json:"awsSecrets,omitempty"`
+	*/
 
 	// Subdirectory on the EFS specified by FSID that should be used as base
 	// of all dynamically provisioner PVs.

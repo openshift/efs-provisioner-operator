@@ -53,6 +53,7 @@ required = [
   [[prune.project]]
     name = "k8s.io/code-generator"
     non-go = false
+    unused-packages = false
 
 [[override]]
   name = "k8s.io/kube-aggregator"

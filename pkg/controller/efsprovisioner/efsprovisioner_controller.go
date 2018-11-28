@@ -392,14 +392,16 @@ func (r *ReconcileEFSProvisioner) syncDeployment(pr *efsv1alpha1.EFSProvisioner,
 			Value: pr.Spec.FSID,
 		},
 		{
-			Name: "AWS_REGION",
-			// TODO Region
+			Name:  "AWS_REGION",
 			Value: pr.Spec.Region,
 		},
 		{
 			Name:  "PROVISIONER_NAME",
 			Value: provisionerName,
 		},
+	}
+	if pr.Spec.DNSName != nil {
+		template.Spec.Containers[0].Env = append(template.Spec.Containers[0].Env, corev1.EnvVar{Name: "DNS_NAME", Value: *pr.Spec.DNSName})
 	}
 
 	if err := controllerutil.SetControllerReference(pr, deployment, r.scheme); err != nil {
