@@ -27,4 +27,4 @@ package:
     internalPort: 443
 
 catalog_sources:
- - rh-operators
+ - storage-operators

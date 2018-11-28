@@ -5,4 +5,4 @@ metadata:
 spec:
   channel: alpha
   name: efs-provisioner
-  source: rh-operators
+  source: storage-operators

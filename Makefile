@@ -13,12 +13,11 @@ $(GOBINDATA_BIN):
 	go get -u github.com/jteeuwen/go-bindata/...
 
 helm:
-	mkdir -p _output
-	helm template deploy/olm/chart -f deploy/olm/chart/values.yaml --output-dir _output
+	mkdir -p build/_output
+	helm template deploy/olm/chart -f deploy/olm/chart/values.yaml --output-dir build/_output
 
 deploy-olm: helm
-	-kubectl create -f _output/olm/templates
-	-kubectl create -f _output/olm/templates/30_09-rh-operators.catalogsource.yaml
+	-kubectl create -f build/_output/olm/templates
 
 deploy-subscription: deploy-olm
 	kubectl create -f deploy/olm-catalog/subscription.yaml
@@ -28,6 +27,9 @@ deploy-installplan: deploy-olm
 
 deploy-vanilla:
 	kubectl create -f deploy
+
+test-e2e:
+	cd test/e2e; dep ensure; ginkgo
 
 clean:
 	rm -rf build/_output

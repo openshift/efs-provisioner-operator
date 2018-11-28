@@ -1,13 +1,13 @@
-{{- if ( has "rh-operators" .Values.catalog_sources ) }}
+{{- if ( has "storage-operators" .Values.catalog_sources ) }}
 kind: ConfigMap
 apiVersion: v1
 metadata:
-  name: rh-operators
+  name: storage-operators
   namespace: {{ .Values.catalog_namespace }}
 {{ $root := . }}
 data:
   customResourceDefinitions: |-
-{{- range $path, $bytes := .Files.Glob "catalog_resources/rh-operators/**.crd.yaml" }}
+{{- range $path, $bytes := .Files.Glob "catalog_resources/storage-operators/**.crd.yaml" }}
   {{- range $index, $line  := $root.Files.Lines $path }}
     {{- if eq $index 0 }}
 {{- $line | printf "%s%s" "- " | nindent 4 }}
@@ -17,7 +17,7 @@ data:
   {{- end }}
 {{- end }}
   clusterServiceVersions: |-
-{{- range $path, $bytes := .Files.Glob "catalog_resources/rh-operators/**.clusterserviceversion.yaml" }}
+{{- range $path, $bytes := .Files.Glob "catalog_resources/storage-operators/**.clusterserviceversion.yaml" }}
   {{- range $index, $line  := $root.Files.Lines $path }}
     {{- if eq $index 0 }}
 {{- $line | printf "%s%s" "- " | nindent 4 }}
@@ -27,7 +27,7 @@ data:
   {{- end }}
 {{- end }}
   packages: |-
-{{- range $path, $bytes := .Files.Glob "catalog_resources/rh-operators/**.package.yaml" }}
+{{- range $path, $bytes := .Files.Glob "catalog_resources/storage-operators/**.package.yaml" }}
   {{- range $index, $line  := $root.Files.Lines $path }}
     {{- if eq $index 0 }}
 {{- $line | printf "%s%s" "- " | nindent 4 }}

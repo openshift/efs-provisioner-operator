@@ -3,7 +3,7 @@ kind: InstallPlan
 metadata:
   name: efs-provisioner
 spec:
-  source: rh-operators
+  source: storage-operators
   approval: Automatic
   approved: true
   clusterServiceVersionNames:
