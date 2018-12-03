@@ -4,7 +4,7 @@ metadata:
   name: efs-provisioner-operator.v0.0.1
   namespace: default
   annotations:
-    alm-examples: '[{"apiVersion":"efsprovisioner.efs.storage.openshift.io/v1alpha1","kind":"EFSProvisioner","metadata":{"name":"example","namespace":"default"},"spec":{"storageClassName":"aws-efs","basePath":"/"}}]'
+    alm-examples: '[{"apiVersion":"efsprovisioner.efs.storage.openshift.io/v1alpha1","kind":"EFSProvisioner","metadata":{"name":"example","namespace":"default"},"spec":{"storageClassName":"aws-efs","basePath":"/","fsid":"fs-01234567","region":"us-east-2"}}]'
 spec:
   displayName: AWS EFS Provisioner
   labels:
@@ -118,6 +118,8 @@ spec:
               - clusterrolebindings
               verbs:
               - create
+              - list
+              - delete
             - apiGroups:
               - rbac.authorization.k8s.io
               resources:
@@ -201,7 +203,13 @@ spec:
           - kind: StorageClass
             version: v1
         specDescriptors:
-          - description: FSID
+          - description: ID of the EFS to use as base for dynamically provisioned PVs
             displayName: FSID
             path: fsid
+          - description: AWS region the provisioner is running in
+            displayName: Region
+            path: region
+          - description: Custom DNS name of the EFS share to mount instead of fsid.efs.region.amazonaws.com
 
+            displayName: DNSName
+            path: dnsName

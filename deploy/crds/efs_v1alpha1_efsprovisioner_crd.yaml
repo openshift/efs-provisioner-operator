@@ -51,7 +51,6 @@ spec:
             gidMax:
               type: integer
           required:
-            - imagePullSpec
             - storageClassName
             - fsid
             - region
