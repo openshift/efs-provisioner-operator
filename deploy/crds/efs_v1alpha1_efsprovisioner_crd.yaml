@@ -12,7 +12,6 @@ spec:
   scope: Namespaced
   version: v1alpha1
   validation:
-   # openAPIV3Schema is the schema for validating custom objects.
     openAPIV3Schema:
       properties:
         spec:
@@ -29,17 +28,18 @@ spec:
               type: string
             replicas:
               type: integer
+              minimum: 1
             storageClassName:
-              type: string
-            fsid:
-              type: string
-            region:
               type: string
             reclaimPolicy:
               type: string
               enum:
                 - Delete
                 - Retain
+            fsid:
+              type: string
+            region:
+              type: string
             basePath:
               type: string
             supplementalGroup:
