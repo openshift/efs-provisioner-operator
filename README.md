@@ -13,5 +13,5 @@ $ oc apply -f ./deploy/
 ```
 2. Create a CR
 ```
-$ oc create -f ./deploy/crds/efs_v1alpha1_efsprovisioner_cr.yaml
+$ oc create -f ./deploy/crds/efs_v1alpha1_efsprovisioner_cr.yaml -n=openshift-efs-provisioner-operator
 ```
