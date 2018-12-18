@@ -231,7 +231,7 @@ func (r *ReconcileEFSProvisioner) syncRBAC(pr *efsv1alpha1.EFSProvisioner) []err
 
 	errors := []error{}
 
-	serviceAccount := resourceread.ReadServiceAccountV1OrDie(generated.MustAsset("manifests/serviceaccount.yaml"))
+	serviceAccount := resourceread.ReadServiceAccountV1OrDie(generated.MustAsset("assets/serviceaccount.yaml"))
 	serviceAccount.SetNamespace(pr.GetNamespace())
 	serviceAccount.SetLabels(selector)
 	if err := controllerutil.SetControllerReference(pr, serviceAccount, r.scheme); err != nil {
@@ -242,14 +242,14 @@ func (r *ReconcileEFSProvisioner) syncRBAC(pr *efsv1alpha1.EFSProvisioner) []err
 		errors = append(errors, fmt.Errorf("error applying serviceAccount: %v", err))
 	}
 
-	clusterRole := resourceread.ReadClusterRoleV1OrDie(generated.MustAsset("manifests/clusterrole.yaml"))
+	clusterRole := resourceread.ReadClusterRoleV1OrDie(generated.MustAsset("assets/clusterrole.yaml"))
 	clusterRole.SetLabels(selector)
 	_, _, err = resourceapply.ApplyClusterRole(r.clientset.RbacV1(), clusterRole)
 	if err != nil {
 		errors = append(errors, fmt.Errorf("error applying clusterRole: %v", err))
 	}
 
-	clusterRoleBinding := resourceread.ReadClusterRoleBindingV1OrDie(generated.MustAsset("manifests/clusterrolebinding.yaml"))
+	clusterRoleBinding := resourceread.ReadClusterRoleBindingV1OrDie(generated.MustAsset("assets/clusterrolebinding.yaml"))
 	clusterRoleBinding.Subjects[0].Namespace = pr.GetNamespace()
 	clusterRoleBinding.SetLabels(selector)
 	_, _, err = resourceapply.ApplyClusterRoleBinding(r.clientset.RbacV1(), clusterRoleBinding)
@@ -257,7 +257,7 @@ func (r *ReconcileEFSProvisioner) syncRBAC(pr *efsv1alpha1.EFSProvisioner) []err
 		errors = append(errors, fmt.Errorf("error applying clusterRoleBinding: %v", err))
 	}
 
-	role := resourceread.ReadRoleV1OrDie(generated.MustAsset("manifests/role.yaml"))
+	role := resourceread.ReadRoleV1OrDie(generated.MustAsset("assets/role.yaml"))
 	role.Namespace = pr.GetNamespace()
 	role.Rules[0].ResourceNames = []string{leaseName}
 	role.SetLabels(selector)
@@ -269,7 +269,7 @@ func (r *ReconcileEFSProvisioner) syncRBAC(pr *efsv1alpha1.EFSProvisioner) []err
 		errors = append(errors, fmt.Errorf("error applying role: %v", err))
 	}
 
-	roleBinding := resourceread.ReadRoleBindingV1OrDie(generated.MustAsset("manifests/rolebinding.yaml"))
+	roleBinding := resourceread.ReadRoleBindingV1OrDie(generated.MustAsset("assets/rolebinding.yaml"))
 	roleBinding.Namespace = pr.GetNamespace()
 	roleBinding.Subjects[0].Namespace = pr.GetNamespace()
 	roleBinding.SetLabels(selector)
@@ -362,7 +362,7 @@ func ApplyStorageClass(client storageclientv1.StorageClassesGetter, required *st
 func (r *ReconcileEFSProvisioner) syncDeployment(pr *efsv1alpha1.EFSProvisioner, previousAvailability *operatorv1alpha1.VersionAvailability, forceDeployment bool) (*appsv1.Deployment, error) {
 	selector := labelsForProvisioner(pr)
 
-	deployment := resourceread.ReadDeploymentV1OrDie(generated.MustAsset("manifests/deployment.yaml"))
+	deployment := resourceread.ReadDeploymentV1OrDie(generated.MustAsset("assets/deployment.yaml"))
 
 	deployment.SetName(pr.GetName())
 	deployment.SetNamespace(pr.GetNamespace())
