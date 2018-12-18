@@ -2,6 +2,7 @@ kind: Role
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
   name: efs-provisioner-operator
+  namespace: openshift-efs-provisioner-operator
 rules:
 - apiGroups:
   - efs.storage.openshift.io
@@ -81,9 +82,10 @@ kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
   name: default-account-efs-provisioner-operator
+  namespace: openshift-efs-provisioner-operator
 subjects:
 - kind: ServiceAccount
-  name: default
+  name: efs-provisioner-operator
 roleRef:
   kind: Role
   name: efs-provisioner-operator
@@ -161,9 +163,8 @@ metadata:
   name: default-account-efs-provisioner-operator
 subjects:
 - kind: ServiceAccount
-  name: default
-  # TODO
-  namespace: default
+  name: efs-provisioner-operator
+  namespace: openshift-efs-provisioner-operator
 roleRef:
   kind: ClusterRole
   name: efs-provisioner-operator
