@@ -103,7 +103,7 @@ type ReconcileEFSProvisioner struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client    client.Client
-	clientset *kubernetes.Clientset
+	clientset kubernetes.Interface
 	scheme    *runtime.Scheme
 }
 
@@ -165,8 +165,8 @@ func (r *ReconcileEFSProvisioner) Reconcile(request reconcile.Request) (reconcil
 		err := r.client.Update(context.TODO(), pr)
 		if err != nil {
 			log.Printf("error setting defaults: %v", err)
+			return reconcile.Result{}, err
 		}
-		return reconcile.Result{}, err
 	}
 
 	err = r.syncFinalizer(pr)
