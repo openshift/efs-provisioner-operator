@@ -22,25 +22,16 @@ spec:
           image: quay.io/external_storage/efs-provisioner:latest
           env:
             - name: FILE_SYSTEM_ID
-              valueFrom:
-                configMapKeyRef:
-                  name: efs-provisioner
-                  key: file.system.id
+              value: fs-12345678
             - name: AWS_REGION
-              valueFrom:
-                configMapKeyRef:
-                  name: efs-provisioner
-                  key: aws.region
+              value: us-east-1
             - name: PROVISIONER_NAME
-              valueFrom:
-                configMapKeyRef:
-                  name: efs-provisioner
-                  key: provisioner.name
+              value: openshift.org/aws-efs
           volumeMounts:
             - name: pv-volume
               mountPath: /persistentvolumes
       volumes:
         - name: pv-volume
           nfs:
-            server: fs-47a2c22e.efs.us-west-2.amazonaws.com
+            server: fs-12345678.efs.us-east-1.amazonaws.com
             path: /persistentvolumes

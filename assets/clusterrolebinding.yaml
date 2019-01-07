@@ -5,6 +5,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: efs-provisioner
+    namespace: efs-provisioner
 roleRef:
   kind: ClusterRole
   name: efs-provisioner-runner
