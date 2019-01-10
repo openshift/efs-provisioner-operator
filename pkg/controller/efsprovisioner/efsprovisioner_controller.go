@@ -123,15 +123,18 @@ func (r *ReconcileEFSProvisioner) Reconcile(request reconcile.Request) (reconcil
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
+			log.Printf("request object not found")
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
+		log.Printf("error reading the object")
 		return reconcile.Result{}, err
 	}
 
 	pr := instance
 	switch pr.Spec.ManagementState {
 	case operatorv1alpha1.Unmanaged:
+		log.Printf("unmanaged; do nothing")
 		return reconcile.Result{}, nil
 
 	case operatorv1alpha1.Removed:
@@ -149,6 +152,7 @@ func (r *ReconcileEFSProvisioner) Reconcile(request reconcile.Request) (reconcil
 				Status: operatorv1alpha1.ConditionFalse,
 			},
 		}
+		log.Printf("cleaned up successfully")
 		return reconcile.Result{}, r.client.Update(context.TODO(), pr)
 	}
 
@@ -171,6 +175,7 @@ func (r *ReconcileEFSProvisioner) Reconcile(request reconcile.Request) (reconcil
 
 	err = r.syncFinalizer(pr)
 	if err != nil {
+		log.Printf("error syncing finalizer: %v", err)
 		return reconcile.Result{}, err
 	}
 
@@ -196,6 +201,7 @@ func (r *ReconcileEFSProvisioner) Reconcile(request reconcile.Request) (reconcil
 	if len(errors) > 0 {
 		log.Printf("errors: %v", errors)
 	}
+	log.Printf("synced successfully")
 	return reconcile.Result{}, utilerrors.NewAggregate(errors)
 }
 
