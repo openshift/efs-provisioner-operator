@@ -38,7 +38,7 @@ $ oc create -f assets/role.yaml -f assets/rolebinding.yaml -f assets/serviceacco
 ```
 4. Edit the deployment and create it
 ```
-$ oc create -f assets/deployment.yaml -n
+$ oc create -f assets/deployment.yaml -n efs-provisioner
 ```
 5. Describe the deployment to get its status
 6. Edit the deployment or edit/recreate the storage class to make configuration changes as needed
