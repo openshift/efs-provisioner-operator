@@ -39,6 +39,13 @@ import (
 
 const (
 	finalizerName = "efs.storage.openshift.io"
+
+	// kubeCloudConfigNamespace is the namespace where the kube cloud config ConfigMap is located
+	kubeCloudConfigNamespace = "openshift-config-managed"
+	// kubeCloudConfigName is the name of the kube cloud config ConfigMap
+	kubeCloudConfigName = "kube-cloud-config"
+	// cloudCABundleKey is the key in the kube cloud config ConfigMap where the custom CA bundle is located
+	cloudCABundleKey = "ca-bundle.pem"
 )
 
 // Add creates a new EFSProvisioner Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -91,6 +98,31 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	})
 	if err != nil {
 		return err
+	}
+
+	// requeue all provisioners when there is a change to the kube-cloud-config ConfigMap
+	if err := c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+			if a.Meta.GetNamespace() != kubeCloudConfigNamespace {
+				return nil
+			}
+			if a.Meta.GetName() != kubeCloudConfigName {
+				return nil
+			}
+			efsProvisionerList := &efsv1alpha1.EFSProvisionerList{}
+			if err := mgr.GetClient().List(context.Background(), nil, efsProvisionerList); err != nil {
+				log.Printf("cannot list EFSProvisioners: %v", err)
+				return nil
+			}
+			requests := make([]reconcile.Request, len(efsProvisionerList.Items))
+			for i, p := range efsProvisionerList.Items {
+				requests[i].Namespace = p.Namespace
+				requests[i].Name = p.Name
+			}
+			return requests
+		}),
+	}); err != nil {
+		return fmt.Errorf("failed to watch ConfigMaps: %w", err)
 	}
 
 	return nil
@@ -410,6 +442,10 @@ func (r *ReconcileEFSProvisioner) syncDeployment(pr *efsv1alpha1.EFSProvisioner,
 		template.Spec.Containers[0].Env = append(template.Spec.Containers[0].Env, corev1.EnvVar{Name: "DNS_NAME", Value: *pr.Spec.DNSName})
 	}
 
+	if err := r.setDeploymentToUseCustomCABundle(pr, template); err != nil {
+		return nil, fmt.Errorf("could not set up deployment to use custom CA bundle: %w", err)
+	}
+
 	if err := controllerutil.SetControllerReference(pr, deployment, r.scheme); err != nil {
 		return nil, err
 	}
@@ -588,4 +624,69 @@ func getNodeName() (string, error) {
 		return "", fmt.Errorf("%s must be set", NodeNameEnvVar)
 	}
 	return nodeName, nil
+}
+
+// setDeploymentToUseCustomCABundle will set the provisioner deployment to use the custom CA bundle for accessing the
+// AWS API. If there is no custom CA bundle defined, then the deployment will not be changed.
+func (r *ReconcileEFSProvisioner) setDeploymentToUseCustomCABundle(pr *efsv1alpha1.EFSProvisioner, template *corev1.PodTemplateSpec) error {
+	// get the CA bundle from the kube-cloud-config configmap
+	cm := &corev1.ConfigMap{}
+	switch err := r.client.Get(context.Background(), client.ObjectKey{Namespace: kubeCloudConfigNamespace, Name: kubeCloudConfigName}, cm); {
+	case apierrors.IsNotFound(err):
+		// if there is kube-cloud-config configmap, then there is no custom CA bundle
+		return nil
+	case err != nil:
+		return fmt.Errorf("failed to get kube-cloud-config ConfigMap: %w", err)
+	}
+	caBundle, ok := cm.Data[cloudCABundleKey]
+	if !ok {
+		// if there is no data for the CA bundle, then there is no custom CA bundle
+		return nil
+	}
+
+	// create a configmap in the provisioner namespace with the custom CA bundle
+	caBundleConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: pr.Namespace,
+			Name: fmt.Sprintf("%s-ca-bundle", pr.Name),
+		},
+		Data: map[string]string{
+			cloudCABundleKey: caBundle,
+		},
+	}
+	if err := controllerutil.SetControllerReference(pr, caBundleConfigMap, r.scheme); err != nil {
+		return fmt.Errorf("could not set controller reference on CA bundle ConfigMap: %w", err)
+	}
+	if _, _, err := resourceapply.ApplyConfigMap(r.clientset.CoreV1(), caBundleConfigMap); err != nil {
+		return fmt.Errorf("could not apply CA bundle ConfigMap: %w", err)
+	}
+
+	// mount the custom CA into the provisioner pod
+	template.Spec.Volumes = append(template.Spec.Volumes,
+		corev1.Volume{
+			Name:         "ca-volume",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: caBundleConfigMap.Name},
+				},
+			},
+		},
+	)
+	const mountPath = "/ca"
+	template.Spec.Containers[0].VolumeMounts = append(template.Spec.Containers[0].VolumeMounts,
+		corev1.VolumeMount{
+			Name:      "ca-volume",
+			MountPath: mountPath,
+		},
+	)
+
+	// set the AWS_CA_BUNDLE environment variable so that the AWS SDK uses the custom CA bundle
+	template.Spec.Containers[0].Env = append(template.Spec.Containers[0].Env,
+		corev1.EnvVar{
+			Name: "AWS_CA_BUNDLE",
+			Value: fmt.Sprintf("%s/%s", mountPath, cloudCABundleKey),
+		},
+	)
+
+	return nil
 }
